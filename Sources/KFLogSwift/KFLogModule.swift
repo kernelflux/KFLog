@@ -1,14 +1,13 @@
 import Foundation
 import KFLogAPI
 import KFService
-@_exported import KFLogAPI
 
-/// KFLog service module — registers the default xlog-backed KFLogger with ServiceFactory.
+/// KFLog module — implements ModuleProtocol for DAG startup.
 ///
-///     KFLogModule.start(namePrefix: "Demo")
+///     try await Engine.run(graph: graph)
 ///     ServiceFactory.resolve(KFLogger.self).info("done")
-public struct KFLogModule {
-    public let priority: Int
+public final class KFLogModule: ModuleProtocol {
+    public static var dependencies: [ModuleID] { [] }
 
     private let mode: KFLogMode
     private let logDir: String?
@@ -18,7 +17,6 @@ public struct KFLogModule {
     private let consoleLog: Bool
 
     public init(
-        priority: Int = 200,
         mode: KFLogMode = .async,
         logDir: String? = nil,
         namePrefix: String = "App",
@@ -26,7 +24,6 @@ public struct KFLogModule {
         level: KFLogLevel = .verbose,
         consoleLog: Bool = false
     ) {
-        self.priority = priority
         self.mode = mode
         self.logDir = logDir
         self.namePrefix = namePrefix
@@ -35,8 +32,7 @@ public struct KFLogModule {
         self.consoleLog = consoleLog
     }
 
-    /// Register KFLogger with ServiceFactory.
-    public func start() {
+    public func performInit() async {
         ServiceFactory.register(KFLogger.self) {
             let dir = logDir ?? NSSearchPathForDirectoriesInDomains(
                 .cachesDirectory, .userDomainMask, true
@@ -47,12 +43,5 @@ public struct KFLogModule {
             if consoleLog { logger.setConsoleLog(true) }
             return logger
         }
-    }
-
-    /// Flush and close logger.
-    public func shutdown() {
-        guard let logger = ServiceFactory.resolveOptional(KFLogger.self) else { return }
-        logger.flush()
-        logger.close()
     }
 }
