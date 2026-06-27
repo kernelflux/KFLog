@@ -38,7 +38,7 @@ public final class KFLogModule: ModuleProtocol {
                 .cachesDirectory, .userDomainMask, true
             ).first ?? NSTemporaryDirectory()
             let logger = KFLogDefault()
-            logger.open(mode: mode, logDir: dir, namePrefix: self.namePrefix, publicKey: self.publicKey)
+            logger.open(mode: self.mode, logDir: dir, namePrefix: self.namePrefix, publicKey: self.publicKey)
             logger.level = self.level
             if self.consoleLog { logger.setConsoleLog(true) }
             return logger
