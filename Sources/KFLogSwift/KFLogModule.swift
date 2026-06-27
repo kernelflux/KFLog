@@ -34,13 +34,13 @@ public final class KFLogModule: ModuleProtocol {
 
     public func performInit() async {
         ServiceFactory.register(KFLogger.self) {
-            let dir = logDir ?? NSSearchPathForDirectoriesInDomains(
+            let dir = self.logDir ?? NSSearchPathForDirectoriesInDomains(
                 .cachesDirectory, .userDomainMask, true
             ).first ?? NSTemporaryDirectory()
             let logger = KFLogDefault()
-            logger.open(mode: mode, logDir: dir, namePrefix: namePrefix, publicKey: publicKey)
-            logger.level = level
-            if consoleLog { logger.setConsoleLog(true) }
+            logger.open(mode: mode, logDir: dir, namePrefix: self.namePrefix, publicKey: self.publicKey)
+            logger.level = self.level
+            if consoleLog { self.consoleLog.setConsoleLog(true) }
             return logger
         }
     }
