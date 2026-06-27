@@ -5,9 +5,9 @@ import KFService
 
 /// KFLog service module — registers the default xlog-backed KFLogger with ServiceFactory.
 ///
-///     ServiceFactory.register(module: KFLogModule(namePrefix: "Demo"))
+///     KFLogModule.start(namePrefix: "Demo")
 ///     ServiceFactory.resolve(KFLogger.self).info("done")
-public struct KFLogModule: KFModule {
+public struct KFLogModule {
     public let priority: Int
 
     private let mode: KFLogMode
@@ -35,7 +35,8 @@ public struct KFLogModule: KFModule {
         self.consoleLog = consoleLog
     }
 
-    public func register() {
+    /// Register KFLogger with ServiceFactory.
+    public func start() {
         ServiceFactory.register(KFLogger.self) {
             let dir = logDir ?? NSSearchPathForDirectoriesInDomains(
                 .cachesDirectory, .userDomainMask, true
@@ -48,7 +49,8 @@ public struct KFLogModule: KFModule {
         }
     }
 
-    public func unregister() {
+    /// Flush and close logger.
+    public func shutdown() {
         guard let logger = ServiceFactory.resolveOptional(KFLogger.self) else { return }
         logger.flush()
         logger.close()
