@@ -40,7 +40,7 @@ public final class KFLogModule: ModuleProtocol {
             let logger = KFLogDefault()
             logger.open(mode: mode, logDir: dir, namePrefix: self.namePrefix, publicKey: self.publicKey)
             logger.level = self.level
-            if consoleLog { self.consoleLog.setConsoleLog(true) }
+            if self.consoleLog { logger.setConsoleLog(true) }
             return logger
         }
     }
