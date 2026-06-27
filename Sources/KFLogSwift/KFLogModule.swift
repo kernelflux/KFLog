@@ -3,10 +3,10 @@ import KFLogAPI
 import KFService
 @_exported import KFLogAPI
 
-/// KFLog service module — registers the default xlog-backed KFLogger with KFServiceManager.
+/// KFLog service module — registers the default xlog-backed KFLogger with ServiceFactory.
 ///
-///     KFServiceManager.register(module: KFLogModule(namePrefix: "Demo"))
-///     KFServiceManager.resolve(KFLogger.self).info("done")
+///     ServiceFactory.register(module: KFLogModule(namePrefix: "Demo"))
+///     ServiceFactory.resolve(KFLogger.self).info("done")
 public struct KFLogModule: KFModule {
     public let priority: Int
 
@@ -36,7 +36,7 @@ public struct KFLogModule: KFModule {
     }
 
     public func register() {
-        KFServiceManager.register(KFLogger.self) {
+        ServiceFactory.register(KFLogger.self) {
             let dir = logDir ?? NSSearchPathForDirectoriesInDomains(
                 .cachesDirectory, .userDomainMask, true
             ).first ?? NSTemporaryDirectory()
@@ -49,7 +49,7 @@ public struct KFLogModule: KFModule {
     }
 
     public func unregister() {
-        guard let logger = KFServiceManager.resolveOptional(KFLogger.self) else { return }
+        guard let logger = ServiceFactory.resolveOptional(KFLogger.self) else { return }
         logger.flush()
         logger.close()
     }
