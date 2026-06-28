@@ -1,10 +1,8 @@
 # KFLog
 
-High-performance iOS logging component — async mmap-backed writer, AES+ECDH encryption, Swift-friendly API with `@autoclosure` support.
+High-performance iOS logging component — async mmap-backed writer, AES+ECDH encryption, Swift-friendly API with `@autoclosure` support and structured metadata.
 
 Forked from [Tencent/mars](https://github.com/Tencent/mars) 1.3.0, stripped of Android/Win32 code, adapted for the KernelFlux component library.
-
-[中文文档](README_CN.md)
 
 ## Features
 
@@ -12,9 +10,9 @@ Forked from [Tencent/mars](https://github.com/Tencent/mars) 1.3.0, stripped of A
 - **AES + ECDH encryption** — logs encrypted at rest, optional public key for key agreement
 - **Console output** — toggle console logging independently from file logging
 - **`@autoclosure` Swift API** — message evaluation deferred until log level is checked
+- **Structured metadata** — `KFLogMetadata` key-value pairs attached to every log entry
 - **File splitting** — configurable max file size and time-based rotation
 - **Module-level log filtering** — `logFileURLs(matching:)` to collect logs by module prefix
-- **System event integration** — auto-flush on background / memory warning via `KFSystemEventObserver`
 
 ## Installation
 
@@ -36,7 +34,7 @@ Then add the target you need:
 |---------|-------------|------------|
 | `KFLog` | ObjC wrapper | `KFLogCore` |
 | `KFLogAPI` | Swift protocol-only (zero deps) | nothing |
-| `KFLogSwift` | Swift extensions + KFService integration | `KFLog`, `KFLogAPI`, `KFService` |
+| `KFLogSwift` | Swift impl + KFService integration | `KFLog`, `KFLogAPI`, `KFService` |
 
 ## Architecture
 
@@ -46,8 +44,8 @@ KFLog
 │   ├── comm/            ← Platform abstraction, thread, mmap
 │   └── log/             ← Log engine: buffer, encryption, file management
 ├── KFLog/               ← ObjC wrapper (KFLog.h, KFLog.mm)
-├── KFLogAPI/            ← Swift protocol (KFLogger) + KFLogLevel, KFLogMode
-└── KFLogSwift/          ← KFLogDefault, KFConsoleLogger, KFCompositeLogger, KFLogModule
+├── KFLogAPI/            ← Swift protocol (KFLogger) + KFLogLevel, KFLogMode, KFLogConfig
+└── KFLogSwift/          ← KFLogDefault, KFConsoleLogger, KFCompositeLogger, KFLogAssembly, KFLogStartupModule
 ```
 
 ## Quick Start
@@ -58,17 +56,28 @@ KFLog
 import KFService
 import KFLogSwift
 
-// Register module at app launch
-KFServiceManager.register(module: KFLogModule(
-    logDir: documentsPath,
-    namePrefix: "MyApp",
-    level: .info
-))
+// In App init — register via assembly (also registers named "console" logger)
+ServiceContainer.shared.install(KFLogAssembly())
 
-// Resolve and log
-let logger = KFServiceManager.resolve(KFLogger.self)
+// In App.task — run startup
+try await Engine.run(modules: [
+    KFLogStartupModule(config: KFLogConfig(
+        logDir: documentsPath,
+        namePrefix: "MyApp",
+        consoleLog: true
+    )),
+])
+```
+
+Resolve and use anywhere:
+
+```swift
+let logger = try ServiceContainer.shared.resolve(KFLogger.self)
 logger.info("User logged in")
-logger.error("Network timeout", tag: "Networking")
+logger.error("Network timeout", metadata: ["host": "api.example.com"], tag: "Networking")
+
+// Console-only logger (named registration)
+let console = try ServiceContainer.shared.resolve(KFLogger.self, name: "console")
 ```
 
 ### Standalone (no KFService)
@@ -76,25 +85,22 @@ logger.error("Network timeout", tag: "Networking")
 ```swift
 import KFLogSwift
 
-let logger = KFLogDefault(
+let logger = KFLogDefault()
+logger.initialize(config: KFLogConfig(
     mode: .async,
     logDir: documentsPath,
-    namePrefix: "MyApp",
-    level: .info
-)
-
+    namePrefix: "MyApp"
+))
 logger.info("App started")
 logger.debug("Cache miss for key: \(key)")  // skipped when level > debug
 logger.flush()  // force write to disk
-
-// Enable console output alongside file logging
 logger.setConsoleLog(true)
 ```
 
 ## Log Levels
 
 ```swift
-public enum KFLogLevel: Int {
+public enum KFLogLevel: Int, Sendable {
     case verbose = 0   // all logs
     case debug   = 1
     case info    = 2   // default for release
@@ -110,11 +116,11 @@ public enum KFLogLevel: Int {
 ### KFLogger Protocol
 
 ```swift
-@objc public protocol KFLogger: AnyObject {
+public protocol KFLogger: AnyObject {
     var level: KFLogLevel { get set }
 
-    func open(mode: KFLogMode, logDir: String, namePrefix: String, publicKey: String?)
-    func close()
+    func initialize(config: KFLogConfig)
+    func unInit()
     func flush()
     func setConsoleLog(_ enabled: Bool)
     func setMaxFileSize(_ size: UInt64)
@@ -122,7 +128,26 @@ public enum KFLogLevel: Int {
     var logFileURLs: [URL] { get }
 
     func log(level: KFLogLevel, tag: String, message: String,
-             file: String, function: String, line: Int)
+             metadata: KFLogMetadata?, file: String, function: String, line: Int)
+}
+```
+
+### KFLogConfig
+
+```swift
+public struct KFLogConfig {
+    public var logDir: String
+    public var namePrefix: String
+    public var publicKey: String?
+    public var mode: KFLogMode
+    public var level: KFLogLevel
+    public var maxFileSize: UInt64
+    public var consoleLog: Bool
+
+    public init(logDir: String, namePrefix: String,
+                publicKey: String? = nil, mode: KFLogMode = .async,
+                level: KFLogLevel = .info, maxFileSize: UInt64 = 5_242_880,
+                consoleLog: Bool = false)
 }
 ```
 
@@ -133,8 +158,19 @@ logger.verbose("...")   // @autoclosure — not evaluated if level > verbose
 logger.debug("...")
 logger.info("...")
 logger.warn("...")
-logger.error("...")
+logger.error("...")     // supports metadata: ["key": "value"]
 logger.fatal("...")
+```
+
+### Structured Metadata
+
+```swift
+logger.info("Request completed", metadata: [
+    "status": "200",
+    "latency_ms": "42",
+    "endpoint": "/api/users"
+])
+// Output: Request completed {endpoint=/api/users latency_ms=42 status=200}
 ```
 
 ## Log File Management
@@ -147,22 +183,25 @@ let urls = logger.logFileURLs
 let networkLogs = logger.logFileURLs(matching: "MyApp_Networking")
 ```
 
-## KFLogModule
+## KFService Integration
 
-Registers with KFService, handles lifecycle:
+| Type | Role |
+|------|------|
+| `KFLogAssembly` | Implements `ServiceAssembly` — registers `KFLogger` → `KFLogDefault`, registers named `"console"` → `KFConsoleLogger` |
+| `KFLogStartupModule` | Implements `StartupModule` — provides `KFLogStartupTask` with config |
 
 ```swift
-KFLogModule(
-    mode: .async,
-    logDir: documentsPath,
-    namePrefix: "MyApp",
-    publicKey: nil,
-    level: .info,
-    priority: 200   // start after KV store
-)
-```
+// Install (sync, in App init)
+ServiceContainer.shared.install(KFLogAssembly())
 
-The module conforms to `KFSystemEventObserver` — auto-flushes on `onEnterBackground()` and `onMemoryWarning()`.
+// Override with custom impl — last write wins
+ServiceContainer.shared.register(KFLogger.self) { MyCustomLogger() }
+
+// Run (async, in App.task)
+try await Engine.run(modules: [
+    KFLogStartupModule(config: KFLogConfig(logDir: dir, namePrefix: "MyApp")),
+])
+```
 
 ## Source Layout
 
@@ -172,12 +211,12 @@ Sources/
 │   ├── comm/             ← Thread, mmap, platform abstraction
 │   └── log/              ← Log buffer, AES/ECDH encryption, file writer
 ├── KFLog/                ← ObjC wrapper (KFLog.h, KFLog.mm)
-├── KFLogAPI/             ← KFLogger protocol, KFLogLevel, KFLogMode
-└── KFLogSwift/           ← KFLogDefault, KFConsoleLogger, KFLogModule
+├── KFLogAPI/             ← KFLogger protocol, KFLogLevel, KFLogMode, KFLogConfig
+└── KFLogSwift/           ← KFLogDefault, KFConsoleLogger, KFLogAssembly, KFLogStartupModule
 ```
 
 ## License
 
 [MIT](LICENSE) — Copyright (c) 2016 THL A29 Limited (Tencent), Copyright (c) 2026 KernelFlux
 
-This project is forked from [Tencent/mars](https://github.com/Tencent/mars) and inherits its MIT license. Per-file license headers have been consolidated into the root [LICENSE](LICENSE).
+This project is forked from [Tencent/mars](https://github.com/Tencent/mars) and inherits its MIT license.
