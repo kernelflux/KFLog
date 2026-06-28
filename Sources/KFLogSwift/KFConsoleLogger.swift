@@ -13,13 +13,14 @@ public final class KFConsoleLogger: KFLogger {
 
     public var logFileURLs: [URL] { [] }
 
-    public func open(mode: KFLogMode, logDir: String, namePrefix: String, publicKey: String?) {}
-    public func close() {}
+    public func initialize(config: KFLogConfig) { self.level = config.level }
+    public func unInit() {}
     public func flush() {}
 
-    public func log(level: KFLogLevel, tag: String, message: String, file: String, function: String, line: Int) {
+    public func log(level: KFLogLevel, tag: String, message: String, metadata: KFLogMetadata?, file: String, function: String, line: Int) {
         guard isEnabled(for: level) else { return }
-        NSLog("[%@] %@", tag, message)
+        let msg = message + formatMetadata(metadata)
+        NSLog("[%@] %@", tag, msg)
     }
 
     private func isEnabled(for level: KFLogLevel) -> Bool {

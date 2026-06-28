@@ -29,18 +29,25 @@ public final class KFLogDefault: KFLogger, KFSystemEventObserver {
         return urls
     }
 
-    public init(level: KFLogLevel = .verbose) {
-        self.level = level
+    public init() {
+        self.level = .verbose
     }
 
-    public func open(mode: KFLogMode, logDir: String, namePrefix: String, publicKey: String?) {
-        _logDir = logDir
-        _namePrefix = namePrefix
-        KFLogEngineBridge.open(mode: mode.rawValue, logDir: logDir,
-                               namePrefix: namePrefix, publicKey: publicKey)
+    public func initialize(config: KFLogConfig) {
+        _logDir = config.logDir
+        _namePrefix = config.namePrefix
+        self.level = config.level
+        KFLogEngineBridge.open(
+            mode: config.mode.rawValue,
+            logDir: config.logDir,
+            namePrefix: config.namePrefix,
+            publicKey: config.publicKey
+        )
+        if !config.consoleLog { setConsoleLog(false) }
+        if config.maxFileSize > 0 { setMaxFileSize(config.maxFileSize) }
     }
 
-    public func close() {
+    public func unInit() {
         KFLogEngineBridge.close()
     }
 
@@ -56,11 +63,12 @@ public final class KFLogDefault: KFLogger, KFSystemEventObserver {
         KFLogEngineBridge.setMaxFileSize(size)
     }
 
-    public func log(level: KFLogLevel, tag: String, message: String, file: String, function: String, line: Int) {
+    public func log(level: KFLogLevel, tag: String, message: String, metadata: KFLogMetadata?, file: String, function: String, line: Int) {
         guard isEnabled(for: level) else { return }
+        let msg = message + formatMetadata(metadata)
         KFLogEngineBridge.log(level: level.rawValue, tag: tag,
                              file: file, function: function,
-                             line: Int32(line), message: message)
+                             line: Int32(line), message: msg)
     }
 
     private func isEnabled(for level: KFLogLevel) -> Bool {

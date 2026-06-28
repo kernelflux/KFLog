@@ -19,12 +19,13 @@ public final class KFCompositeLogger: KFLogger {
         for logger in loggers { logger.level = level }
     }
 
-    public func open(mode: KFLogMode, logDir: String, namePrefix: String, publicKey: String?) {
-        for logger in loggers { logger.open(mode: mode, logDir: logDir, namePrefix: namePrefix, publicKey: publicKey) }
+    public func initialize(config: KFLogConfig) {
+        self.level = config.level
+        for logger in loggers { logger.initialize(config: config) }
     }
 
-    public func close() {
-        for logger in loggers { logger.close() }
+    public func unInit() {
+        for logger in loggers { logger.unInit() }
     }
 
     public func flush() {
@@ -32,20 +33,20 @@ public final class KFCompositeLogger: KFLogger {
     }
 
     public func setConsoleLog(_ enabled: Bool) {
-        for logger in loggers { logger.setConsoleLog?(enabled) }
+        for logger in loggers { logger.setConsoleLog(enabled) }
     }
 
     public func setMaxFileSize(_ size: UInt64) {
-        for logger in loggers { logger.setMaxFileSize?(size) }
+        for logger in loggers { logger.setMaxFileSize(size) }
     }
 
     public var logFileURLs: [URL] {
         loggers.flatMap { $0.logFileURLs }
     }
 
-    public func log(level: KFLogLevel, tag: String, message: String, file: String, function: String, line: Int) {
+    public func log(level: KFLogLevel, tag: String, message: String, metadata: KFLogMetadata?, file: String, function: String, line: Int) {
         for logger in loggers {
-            logger.log(level: level, tag: tag, message: message, file: file, function: function, line: line)
+            logger.log(level: level, tag: tag, message: message, metadata: metadata, file: file, function: function, line: line)
         }
     }
 }

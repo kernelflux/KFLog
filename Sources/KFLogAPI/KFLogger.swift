@@ -1,7 +1,7 @@
 import Foundation
 
 /// Log level. rawValue matches the underlying C engine's level enum.
-@objc public enum KFLogLevel: Int {
+public enum KFLogLevel: Int, Sendable {
     case verbose = 0
     case debug = 1
     case info = 2
@@ -12,32 +12,57 @@ import Foundation
 }
 
 /// Log appender mode.
-@objc public enum KFLogMode: Int {
+public enum KFLogMode: Int, Sendable {
     case async = 0
     case sync = 1
 }
 
+/// Structured metadata — key-value pairs attached to a log entry.
+public typealias KFLogMetadata = [String: String]
+
 /// Abstract logger protocol.
 /// Implement this to provide custom logging backends (console, file, network, etc.).
-@objc public protocol KFLogger: AnyObject {
+public protocol KFLogger: AnyObject {
     var level: KFLogLevel { get set }
 
-    @objc func open(mode: KFLogMode, logDir: String, namePrefix: String, publicKey: String?)
-    @objc func close()
-    @objc func flush()
-    @objc optional func setConsoleLog(_ enabled: Bool)
-    @objc optional func setMaxFileSize(_ size: UInt64)
+    func initialize(config: KFLogConfig)
+    func unInit()
+    func flush()
+    func setConsoleLog(_ enabled: Bool)
+    func setMaxFileSize(_ size: UInt64)
 
     /// URLs of all current log files on disk (.xlog + .mmap3).
     /// Returns an empty array for loggers without disk persistence (e.g. console).
     var logFileURLs: [URL] { get }
 
+    /// Core log method. `metadata` is appended to the formatted message.
     func log(level: KFLogLevel,
              tag: String,
              message: String,
+             metadata: KFLogMetadata?,
              file: String,
              function: String,
              line: Int)
+}
+
+// MARK: - Default metadata formatting
+
+public extension KFLogger {
+    /// Default: format metadata as `key=value` pairs appended to the message.
+    func formatMetadata(_ metadata: KFLogMetadata?) -> String {
+        guard let metadata, !metadata.isEmpty else { return "" }
+        let pairs = metadata.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: " ")
+        return " {\(pairs)}"
+    }
+}
+
+// MARK: - Optional config methods
+
+public extension KFLogger {
+    func setConsoleLog(_ enabled: Bool) {}
+    func setMaxFileSize(_ size: UInt64) {}
 }
 
 // MARK: - Log Files
@@ -59,56 +84,62 @@ public extension KFLogger {
 
 public extension KFLogger {
     func verbose(_ message: @autoclosure () -> String,
+                 metadata: KFLogMetadata? = nil,
                  tag: String = "KFLog",
                  file: String = #file,
                  function: String = #function,
                  line: Int = #line) {
         guard level.rawValue <= KFLogLevel.verbose.rawValue else { return }
-        log(level: .verbose, tag: tag, message: message(), file: file, function: function, line: line)
+        log(level: .verbose, tag: tag, message: message(), metadata: metadata, file: file, function: function, line: line)
     }
 
     func debug(_ message: @autoclosure () -> String,
+               metadata: KFLogMetadata? = nil,
                tag: String = "KFLog",
                file: String = #file,
                function: String = #function,
                line: Int = #line) {
         guard level.rawValue <= KFLogLevel.debug.rawValue else { return }
-        log(level: .debug, tag: tag, message: message(), file: file, function: function, line: line)
+        log(level: .debug, tag: tag, message: message(), metadata: metadata, file: file, function: function, line: line)
     }
 
     func info(_ message: @autoclosure () -> String,
+              metadata: KFLogMetadata? = nil,
               tag: String = "KFLog",
               file: String = #file,
               function: String = #function,
               line: Int = #line) {
         guard level.rawValue <= KFLogLevel.info.rawValue else { return }
-        log(level: .info, tag: tag, message: message(), file: file, function: function, line: line)
+        log(level: .info, tag: tag, message: message(), metadata: metadata, file: file, function: function, line: line)
     }
 
     func warn(_ message: @autoclosure () -> String,
+              metadata: KFLogMetadata? = nil,
               tag: String = "KFLog",
               file: String = #file,
               function: String = #function,
               line: Int = #line) {
         guard level.rawValue <= KFLogLevel.warn.rawValue else { return }
-        log(level: .warn, tag: tag, message: message(), file: file, function: function, line: line)
+        log(level: .warn, tag: tag, message: message(), metadata: metadata, file: file, function: function, line: line)
     }
 
     func error(_ message: @autoclosure () -> String,
+               metadata: KFLogMetadata? = nil,
                tag: String = "KFLog",
                file: String = #file,
                function: String = #function,
                line: Int = #line) {
         guard level.rawValue <= KFLogLevel.error.rawValue else { return }
-        log(level: .error, tag: tag, message: message(), file: file, function: function, line: line)
+        log(level: .error, tag: tag, message: message(), metadata: metadata, file: file, function: function, line: line)
     }
 
     func fatal(_ message: @autoclosure () -> String,
+               metadata: KFLogMetadata? = nil,
                tag: String = "KFLog",
                file: String = #file,
                function: String = #function,
                line: Int = #line) {
         guard level.rawValue <= KFLogLevel.fatal.rawValue else { return }
-        log(level: .fatal, tag: tag, message: message(), file: file, function: function, line: line)
+        log(level: .fatal, tag: tag, message: message(), metadata: metadata, file: file, function: function, line: line)
     }
 }

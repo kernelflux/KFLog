@@ -5,6 +5,7 @@ let package = Package(
     name: "KFLog",
     platforms: [
         .iOS(.v16),
+        .macOS(.v13),
     ],
     products: [
         .library(
@@ -21,7 +22,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/kernelflux/kfservice.git", from: "1.0.0"),
+        .package(path: "../kfservice"),
     ],
     targets: [
         // C/C++ core
